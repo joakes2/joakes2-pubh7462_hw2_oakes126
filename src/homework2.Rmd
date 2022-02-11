@@ -1,0 +1,155 @@
+---
+title: "Homework2"
+author: "Jacqueline Oakes"
+date: "2/10/2022"
+output: github_document
+---
+
+```{r setup, include = FALSE}
+#Load all the good stuff
+library(tidyverse)
+library(gt)
+library(forcats)
+library(stringr)
+library(janitor)
+
+#Working directory for .RMD
+knitr::opts_knit$set(echo = TRUE,
+                     root.dir = rprojroot::find_rstudio_root_file())
+
+#Controlling figure output in markdown
+knitr::opts_chunk$set(
+#  fig.height =   
+  fig.width = 6,
+#  fig.asp = .5,
+  out.width = "90%",
+#  out.height = 
+ fig.align  = "center",
+  cache = FALSE,
+  eval  = TRUE,
+  echo  = FALSE
+)
+
+#My Colours (from viridis)
+my_purple <- "#440154FF"
+my_yellow <- "#FDE725FF"
+
+#Set Theme for ggplot2
+theme_set(theme_bw() + theme(plot.title = element_text(hjust = 0.5), legend.position = "bottom"))
+
+#Set Scientific notation output and decimal places for knitr
+options(scipen = 999)
+options(digits = 4)
+```
+
+# Problem 3.1
+```{r message = FALSE, warning = FALSE}
+health.df <- read_csv("./data/brfss_smart_2010.CSV") %>%
+  clean_names() %>%
+  filter(topic %in% c("Overall Health")) %>%
+  separate("locationdesc", c("state", "county")) %>%
+select(c("year", "state", "county", "response", "sample_size", "data_value")) %>%
+  rename(proportion = data_value)
+``` 
+
+* Data was cleaned
+
+# Problem 3.2
+* The number of rows is `r nrow(health.df)`
+* The number of columns is `r ncol(health.df)`
+* Each observation is a county located within a state in the US.
+* Each variable describes the year, state, county, the response of the topic of overall health to the question "how is your general health?", the sample size, and the data value in percentage.
+* Data value is the proportion and was properly renamed.
+
+# Problem 3.3.1
+```{r message = FALSE, warning = FALSE}
+locations.df <- health.df %>%
+  filter(year %in% 2004) %>%
+  distinct(state, county) %>%
+  group_by(state) %>%
+  summarise(n = n()) %>%
+  filter(n %in% 6)
+```
+
+* The states that were observed at 6 locations are: CO, NM, SC, TX, UT, VT
+
+# Problem 3.3.2
+```{r message = FALSE, warning = FALSE}
+health.df %>%
+  distinct(state, county, year) %>%
+  group_by(state, year) %>%
+  summarise(n = n()) %>%
+  mutate(state = fct_reorder(state, n, .fun = "mean", .desc = TRUE),
+    year = year %>%
+           as.character() %>%
+           as.numeric()) %>%
+
+ggplot(aes(x = year, y = n, color = state)) +
+  geom_line() +
+  labs(x = "Year", y = "Total Observations",
+    title = "Observed Trends by State and Year 2002 - 2010") +
+    scale_x_continuous(breaks = 2002:2010) +
+    theme(legend.position = "right") +
+    theme(plot.title = element_text(face = "bold")) +
+    theme(panel.background = element_blank()) +
+    theme(axis.line = element_line(colour = "black")) +
+    theme(plot.title = element_text(hjust = 0.5))
+``` 
+
+* My observation is that I am not sure why the legend is still in alphabetical order. It looks like GA had the highest observations during 2006 - 2008 & after 2009.
+
+# Problem 3.3.3
+```{r message = FALSE, warning = FALSE}
+health.df %>%
+  filter(state %in% "MN",
+         year %in% c("2002", "2006", "2010"),
+         response %in% c("Excellent", "Good", "Poor")) %>%
+  group_by(year, county) %>%
+  summarise(across(c(sample_size, proportion), 
+                     .f = list(mean = mean, sd = sd), na.rm = TRUE,
+                     .names = "{.col}_{.fn}")) %>%
+
+  gt() %>%
+  tab_header("Health Quality in MN 2002 - 2010") %>%
+  cols_label(county = "County",
+             sample_size_mean = "Sample Mean",
+             sample_size_sd = "Sample SD",
+             proportion_mean = "Prop Mean",
+             proportion_sd = "Prop SD")
+```
+
+* Washington County was only in 2010 and Anoka County was not in 2006.
+
+# Problem 3.3.4
+```{r fig.height = 8, message = FALSE, warning = FALSE}
+health.df %>%
+ filter(state %in% "MN",
+         year %in% c("2002", "2006", "2010"),
+         response %in% c("Excellent", "Good", "Poor")) %>%
+  group_by(year, county, response) %>%
+  summarise(across(c("sample_size", "proportion"), 
+                   mean, na.rm = TRUE,
+                  .names = "{.col}_mean")) %>%
+  
+  pivot_longer(county,
+               names_to = "name",
+               values_to = "mean") %>%
+  
+  mutate(name = str_remove(name, "_")) %>%
+  
+  pivot_wider(names_from  = "name",
+              values_from = "mean") %>%
+
+   mutate(fct_infreq(response)) %>%
+
+ggplot() +
+  geom_bar(aes(x = county, fill = response)) +
+  labs(x = "County", y = "Proportion (%)",
+       title = "Health Status by MN Counties") +
+    theme(legend.position = "right") +
+    theme(legend.title = element_blank()) +
+    theme(plot.title = element_text(face = "bold")) +
+    theme(panel.background = element_blank()) +
+    theme(axis.line = element_line(colour = "black")) +
+    theme(plot.title = element_text(hjust = 0.5))
+```
